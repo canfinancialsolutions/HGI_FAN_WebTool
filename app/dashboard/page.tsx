@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 type FnaRow = {
@@ -11,30 +12,55 @@ type FnaRow = {
 };
 
 export default function Dashboard() {
+  const router = useRouter();
   const [fnaList, setFnaList] = useState<FnaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/auth';
-        return;
+      try {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr) throw sessionErr;
+
+        if (!session) {
+          router.replace('/auth');
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('fna_sessions')
+          .select('id, created_at, household_income, dependents')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (!cancelled) setFnaList((data ?? []) as FnaRow[]);
+      } catch (e: any) {
+        if (!cancelled) setErrMsg(e?.message ?? 'Unexpected error');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const { data, error } = await supabase
-        .from('fna_sessions')
-        .select('id, created_at, household_income, dependents')
-        .order('created_at', { ascending: false });
-
-      if (!error && data) setFnaList(data as FnaRow[]);
-      setLoading(false);
     };
 
     load();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   if (loading) return <p>Loading…</p>;
+
+  if (errMsg) {
+    return (
+      <main className="min-h-screen p-6 bg-slate-100">
+        <h1 className="text-2xl font-bold mb-2">Agent Dashboard</h1>
+        <p className="text-red-600">Error: {errMsg}</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen p-6 bg-slate-100">
@@ -49,16 +75,13 @@ export default function Dashboard() {
           </tr>
         </thead>
         <tbody>
-          {fnaList.map(row => (
+          {fnaList.map((row) => (
             <tr key={row.id} className="border-b">
               <td className="p-2">{new Date(row.created_at).toLocaleString()}</td>
               <td className="p-2">${row.household_income.toLocaleString()}</td>
               <td className="p-2">{row.dependents}</td>
               <td className="p-2">
-                <a
-                  href={`/dashboard/${row.id}`}
-                  className="text-indigo-600 underline text-sm"
-                >
+                <a href={`/dashboard/${row.id}`} className="text-indigo-600 underline text-sm">
                   View / PDF
                 </a>
               </td>
