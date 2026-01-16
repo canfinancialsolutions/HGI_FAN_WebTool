@@ -1,49 +1,38 @@
+
+// app/api/fna/[id]/pdf/route.ts
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import PDFDocument from 'pdfkit';
 import { supabase } from '@/lib/supabaseClient';
 
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const { data, error } = await supabase
-    .from('fna_sessions')
-    .select('*')
-    .eq('id', params.id)
-    .single();
+  const { default: PDFDocument } = await import('pdfkit');
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
+  const doc = new PDFDocument({ autoFirstPage: false });
+  doc.addPage().fontSize(16).text(`FNA PDF for ID: ${params.id}`);
 
-  const doc = new PDFDocument();
-  const chunks: Uint8Array[] = [];
+  const chunks: Buffer[] = [];
+  const stream = doc as unknown as NodeJS.ReadableStream;
 
-  doc.on('data', chunk => chunks.push(chunk));
-  doc.on('end', () => {});
+  await new Promise<void>((resolve, reject) => {
+    stream.on('data', (c) => chunks.push(Buffer.from(c)));
+    stream.on('end', resolve);
+    stream.on('error', reject);
+    doc.end();
+  });
 
-  doc.fontSize(18).text('Financial Needs Analysis Report', { underline: true });
-  doc.moveDown();
-  doc.fontSize(12).text(`Date: ${new Date(data.created_at).toLocaleString()}`);
-  doc.moveDown();
-  doc.text(`Household Income: $${data.household_income}`);
-  doc.text(`Debt Total: $${data.debt_total}`);
-  doc.text(`Savings Total: $${data.savings_total}`);
-  doc.text(`Dependents: ${data.dependents}`);
-  doc.text(`Years of Income to Protect: ${data.goal_years_of_income}`);
-  doc.end();
+  const pdf = Buffer.concat(chunks);
 
-  await new Promise(resolve => doc.on('end', resolve));
-
-  const pdfBuffer = Buffer.concat(chunks);
-
-  return new NextResponse(pdfBuffer, {
+  return new NextResponse(pdf, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="fna-${params.id}.pdf"`
-    }
+      'Content-Disposition': `inline; filename="fna-${params.id}.pdf"`,
+      'Cache-Control': 'no-store',
+    },
   });
 }
