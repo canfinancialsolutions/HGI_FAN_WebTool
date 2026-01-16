@@ -14,6 +14,18 @@ export async function GET() {
   });
 }
 
+
+// app/page.tsx
+export default function HomePage() {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
+      <h1>Welcome to HGI App</h1>
+      <p>This is a clean starter page. Build should pass now.</p>
+    </main>
+  );
+}
+
+
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
