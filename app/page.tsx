@@ -1,5 +1,19 @@
 'use client';
 
+// app/api/fna/[id]/pdf/route.ts
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const { default: PDFDocument } = await import('pdfkit');
+  // ... generate pdf ...
+  return new NextResponse(/* buffer */, {
+    headers: { 'Content-Type': 'application/pdf' },
+  });
+}
+
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
